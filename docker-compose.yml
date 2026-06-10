@@ -2,12 +2,11 @@ services:
   factorio:
     platform: linux/amd64
     build: .
-    # Or pull directly: image: ghcr.io/yourname/factorio-managed:latest
     restart: unless-stopped
     ports:
-      - "34197:34197/udp"   # game
-      - "27015:27015/tcp"   # rcon (optional)
-      - "8080:8080/tcp"     # manager UI
+      - "34197:34197/udp" # game
+      - "27015:27015/tcp" # rcon (optional)
+      - "8080:8080/tcp" # manager UI
     volumes:
       - factorio-data:/factorio
     environment:
