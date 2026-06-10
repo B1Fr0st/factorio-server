@@ -298,6 +298,7 @@ async def start_server() -> dict:
         log_buffer.append(f"[manager] Starting: {' '.join(cmd)}")
         factorio_proc = await asyncio.create_subprocess_exec(
             *cmd,
+            stdin=asyncio.subprocess.PIPE,   # keep open so Factorio doesn't get EOF
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(DATA_DIR),
