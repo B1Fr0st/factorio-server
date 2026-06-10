@@ -66,7 +66,7 @@ Open **http://localhost:8080** to access the UI.
 
 ## Mod portal credentials
 
-Mod installation requires a Factorio account. Enter your username and API token in the **Mod Portal Credentials** card on the Mods tab. Credentials are saved in your browser's localStorage and never sent to the server — only used when you click Install.
+Mod installation requires a Factorio account. Enter your username and API token in the **Mod Portal Credentials** card on the Mods tab. Credentials are saved in your browser's localStorage and are sent to the server when you install a mod — the server uses them to authenticate the download from the mod portal. You can also pre-fill them via the `FACTORIO_USERNAME` and `FACTORIO_TOKEN` environment variables.
 
 ## Building from source
 
