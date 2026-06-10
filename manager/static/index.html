@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Factorio Manager</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #1a1a1a; --surface: #252525; --border: #3a3a3a;
+    --accent: #e8a21a; --accent2: #c47a15;
+    --text: #e0e0e0; --muted: #888; --danger: #c0392b; --success: #27ae60;
+    --font: 'Segoe UI', system-ui, sans-serif; --mono: 'Cascadia Code', 'Consolas', monospace;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; min-height: 100vh; }
+  header { background: var(--surface); border-bottom: 2px solid var(--accent); padding: 0 24px; display: flex; align-items: center; gap: 16px; height: 52px; }
+  header h1 { font-size: 18px; color: var(--accent); font-weight: 700; letter-spacing: .5px; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); transition: background .3s; }
+  .status-dot.online { background: var(--success); box-shadow: 0 0 6px var(--success); }
+  .status-dot.offline { background: var(--danger); }
+  #status-text { font-size: 12px; color: var(--muted); }
+  nav { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; padding: 0 24px; gap: 2px; }
+  nav button { background: none; border: none; color: var(--muted); padding: 12px 16px; cursor: pointer; font-size: 13px; border-bottom: 2px solid transparent; transition: all .2s; }
+  nav button.active, nav button:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab { display: none; padding: 24px; max-width: 1100px; }
+  .tab.active { display: block; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 14px; font-weight: 600; color: var(--accent); margin-bottom: 16px; text-transform: uppercase; letter-spacing: .5px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .row:last-child { margin-bottom: 0; }
+  button.btn { background: var(--accent); color: #111; border: none; padding: 8px 18px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; transition: background .15s; }
+  button.btn:hover { background: var(--accent2); }
+  button.btn.danger { background: var(--danger); color: #fff; }
+  button.btn.danger:hover { background: #a93226; }
+  button.btn.secondary { background: var(--border); color: var(--text); }
+  button.btn.secondary:hover { background: #4a4a4a; }
+  button.btn:disabled { opacity: .4; cursor: not-allowed; }
+  input[type=text], input[type=password], input[type=number], select {
+    background: #1e1e1e; border: 1px solid var(--border); color: var(--text);
+    padding: 7px 10px; border-radius: 4px; font-size: 13px; outline: none;
+    transition: border-color .15s;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  label { font-size: 12px; color: var(--muted); margin-bottom: 4px; display: block; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  td { padding: 10px 12px; border-bottom: 1px solid #2a2a2a; font-size: 13px; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #2c2c2c; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; }
+  .badge.enabled { background: #1e3a2a; color: var(--success); }
+  .badge.disabled { background: #3a2020; color: #e74c3c; }
+  .badge.dlc { background: #2a2a1a; color: var(--accent); }
+  #log-box { background: #111; border: 1px solid var(--border); border-radius: 4px; height: 500px; overflow-y: auto; padding: 12px; font-family: var(--mono); font-size: 12px; line-height: 1.6; }
+  #log-box .line { word-break: break-all; }
+  #log-box .c-ts      { color: #4a4a4a; }
+  #log-box .c-err     { color: #e74c3c; }
+  #log-box .c-warn    { color: #e8a21a; }
+  #log-box .c-mgr     { color: #3498db; }
+  #log-box .c-chat    { color: #2ecc71; }
+  #log-box .c-join    { color: #27ae60; }
+  #log-box .c-leave   { color: #e67e22; }
+  #log-box .c-cmd     { color: #9b59b6; }
+  #log-box .c-discord { color: #7289da; }
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); padding: 12px 18px; border-radius: 4px; font-size: 13px; z-index: 999; opacity: 0; transition: opacity .25s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .toast.error { border-left-color: var(--danger); }
+  #password-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  #password-overlay .box { background: var(--surface); border: 1px solid var(--border); padding: 32px; border-radius: 8px; width: 320px; display: flex; flex-direction: column; gap: 16px; }
+  #password-overlay h2 { color: var(--accent); font-size: 16px; }
+  textarea { background: #1e1e1e; border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 4px; font-family: var(--mono); font-size: 12px; width: 100%; resize: vertical; outline: none; }
+  textarea:focus { border-color: var(--accent); }
+  .toggle { position: relative; display: inline-block; width: 36px; height: 20px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; inset: 0; background: #444; border-radius: 20px; cursor: pointer; transition: background .2s; }
+  .slider::before { content: ''; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: transform .2s; }
+  input:checked + .slider { background: var(--success); }
+  input:checked + .slider::before { transform: translateX(16px); }
+  input[type=checkbox] { accent-color: var(--accent); cursor: pointer; width: 14px; height: 14px; }
+  .mod-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .mod-toolbar .selection-count { font-size: 12px; color: var(--muted); margin-left: 4px; }
+  .search-results { margin-top: 12px; }
+  .search-result-item { padding: 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .search-result-item:last-child { border-bottom: none; }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .config-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .config-grid .field input, .config-grid .field select { width: 100%; }
+  #config-raw { min-height: 400px; }
+</style>
+</head>
+<body>
+
+<div id="password-overlay" style="display:none">
+  <div class="box">
+    <h2>Authentication Required</h2>
+    <div class="field">
+      <label>Manager Password</label>
+      <input type="password" id="pw-input" placeholder="Enter password">
+    </div>
+    <button class="btn" onclick="submitPassword()">Connect</button>
+  </div>
+</div>
+
+<header>
+  <h1>Factorio Manager</h1>
+  <div class="status-dot offline" id="status-dot"></div>
+  <span id="status-text">Loading…</span>
+</header>
+
+<nav>
+  <button class="active" onclick="showTab('overview')">Overview</button>
+  <button onclick="showTab('logs')">Logs</button>
+  <button onclick="showTab('mods')">Mods</button>
+  <button onclick="showTab('saves')">Saves</button>
+  <button onclick="showTab('config')">Config</button>
+</nav>
+
+<!-- OVERVIEW -->
+<div id="tab-overview" class="tab active">
+  <div class="card">
+    <h2>Server Controls</h2>
+    <div class="row">
+      <button class="btn" id="btn-start" onclick="serverAction('start')">Start</button>
+      <button class="btn danger" id="btn-stop" onclick="serverAction('stop')">Stop</button>
+      <button class="btn secondary" id="btn-restart" onclick="serverAction('restart')">Restart</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOGS -->
+<div id="tab-logs" class="tab">
+  <div class="card">
+    <h2>Server Logs</h2>
+    <div class="row">
+      <button class="btn secondary" onclick="clearLogs()">Clear Display</button>
+      <label class="toggle" title="Auto-scroll">
+        <input type="checkbox" id="autoscroll" checked>
+        <span class="slider"></span>
+      </label>
+      <span style="font-size:12px;color:var(--muted)">Auto-scroll</span>
+    </div>
+    <div id="log-box"></div>
+  </div>
+</div>
+
+<!-- MODS -->
+<div id="tab-mods" class="tab">
+  <div class="card">
+    <h2>Mod Portal Credentials</h2>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:12px">Required to install mods from the portal. Find your token at <strong>factorio.com → Profile → API Key</strong>. Saved in your browser only.</p>
+    <div class="row">
+      <div class="field">
+        <label>Factorio Username</label>
+        <input type="text" id="factorio-username" placeholder="your username" style="width:200px" oninput="saveCredentials()">
+      </div>
+      <div class="field">
+        <label>API Token</label>
+        <input type="password" id="factorio-token" placeholder="paste token here" style="width:280px" oninput="saveCredentials()">
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Installed Mods</h2>
+    <div id="mod-list-container"><span class="spinner"></span></div>
+  </div>
+  <div class="card">
+    <h2>Install from Mod Portal</h2>
+    <div class="row">
+      <div class="field">
+        <label>Search</label>
+        <input type="text" id="mod-search-input" placeholder="e.g. FARL, Bob's Ores…" style="width:280px" onkeydown="if(event.key==='Enter')searchMods()">
+      </div>
+      <button class="btn secondary" onclick="searchMods()">Search</button>
+    </div>
+    <div id="mod-search-results"></div>
+  </div>
+  <div class="card">
+    <h2>Upload Mod</h2>
+    <div class="row">
+      <input type="file" id="mod-file-input" accept=".zip">
+      <button class="btn" onclick="uploadMod()">Upload</button>
+    </div>
+    <small style="color:var(--muted)">File must be named <code>modname_X.Y.Z.zip</code></small>
+  </div>
+</div>
+
+<!-- SAVES -->
+<div id="tab-saves" class="tab">
+  <div class="card">
+    <h2>Save Files</h2>
+    <div id="save-list-container"><span class="spinner"></span></div>
+  </div>
+  <div class="card">
+    <h2>Create New World</h2>
+    <div class="row">
+      <div class="field">
+        <label>World Name</label>
+        <input type="text" id="new-world-name" placeholder="my-world" style="width:220px">
+      </div>
+      <button class="btn" id="btn-create-world" onclick="createNewWorld()">Generate &amp; Start</button>
+    </div>
+    <small style="color:var(--muted)">Creates a save with default map settings, then starts the server. Takes 10–30 s.</small>
+  </div>
+  <div class="card">
+    <h2>Upload Existing Save</h2>
+    <div class="row">
+      <input type="file" id="save-file-input" accept=".zip">
+      <button class="btn" onclick="uploadSave()">Upload</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIG -->
+<div id="tab-config" class="tab">
+  <div class="card">
+    <h2>Factorio Version</h2>
+    <div class="row" style="margin-bottom:8px">
+      <span style="color:var(--muted);font-size:12px">Current:</span>
+      <span id="current-factorio-version" style="font-weight:600">…</span>
+      <span style="color:var(--muted);font-size:12px;margin-left:16px">Stable:</span>
+      <span id="stable-factorio-version" style="color:var(--muted)">…</span>
+      <span style="color:var(--muted);font-size:12px;margin-left:16px">Experimental:</span>
+      <span id="experimental-factorio-version" style="color:var(--muted)">…</span>
+    </div>
+    <div class="row">
+      <button class="btn secondary" id="btn-install-stable" onclick="installFactorioVersion('stable')">Install Stable</button>
+      <button class="btn secondary" id="btn-install-experimental" onclick="installFactorioVersion('experimental')">Install Experimental</button>
+      <div class="field">
+        <label>Specific version</label>
+        <input type="text" id="factorio-version-input" placeholder="e.g. 2.0.76" style="width:130px" onkeydown="if(event.key==='Enter')installFactorioVersion(this.value)">
+      </div>
+      <button class="btn" onclick="installFactorioVersion(document.getElementById('factorio-version-input').value)">Install</button>
+    </div>
+    <small style="color:var(--muted)">Server will stop, update, then restart automatically if it was running. Progress streams to the Logs tab.</small>
+  </div>
+  <div class="card">
+    <h2>Server Settings</h2>
+    <div class="config-grid" id="config-form"></div>
+    <div class="row" style="margin-top:16px">
+      <button class="btn" onclick="saveConfig()">Save Settings</button>
+      <button class="btn secondary" onclick="toggleRawConfig()">Toggle Raw JSON</button>
+    </div>
+    <div id="raw-config-section" style="display:none;margin-top:16px">
+      <textarea id="config-raw" spellcheck="false"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" onclick="saveRawConfig()">Save Raw JSON</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let password = '';
+let wsLog = null;
+let selectedPortalMod = null;
+let currentConfig = {};
+let serverRunning = false;
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+function submitPassword() {
+  password = document.getElementById('pw-input').value;
+  document.getElementById('password-overlay').style.display = 'none';
+  init();
+}
+
+function authHeaders() {
+  const h = {};
+  if (password) h['x-manager-password'] = password;
+  return h;
+}
+
+async function apiFetch(path, opts = {}) {
+  opts.headers = { ...(opts.headers || {}), ...authHeaders() };
+  if (opts.body && typeof opts.body === 'object' && !(opts.body instanceof FormData)) {
+    opts.headers['content-type'] = 'application/json';
+    opts.body = JSON.stringify(opts.body);
+  }
+  const r = await fetch(path, opts);
+  if (r.status === 401) {
+    document.getElementById('password-overlay').style.display = 'flex';
+    throw new Error('Unauthorized');
+  }
+  return r;
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+async function init() {
+  loadCredentials();
+  await refreshStatus();
+  setInterval(refreshStatus, 5000);
+  connectLogWs();
+  loadModList();
+  loadSaveList();
+  loadConfig();
+}
+
+// Check if password is needed
+async function bootstrap() {
+  const r = await fetch('/api/status');
+  if (r.status === 401) {
+    document.getElementById('password-overlay').style.display = 'flex';
+  } else {
+    init();
+  }
+}
+bootstrap();
+
+// ---------------------------------------------------------------------------
+// Status
+// ---------------------------------------------------------------------------
+async function refreshStatus() {
+  try {
+    const r = await apiFetch('/api/status');
+    const data = await r.json();
+    serverRunning = data.running;
+    const dot = document.getElementById('status-dot');
+    const txt = document.getElementById('status-text');
+    dot.className = 'status-dot ' + (data.running ? 'online' : 'offline');
+    txt.textContent = data.running ? `Online (PID ${data.pid})` : 'Offline';
+  } catch {}
+}
+
+// ---------------------------------------------------------------------------
+// Tabs
+// ---------------------------------------------------------------------------
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (name === 'mods') loadModList();
+  if (name === 'saves') loadSaveList();
+  if (name === 'config') { loadConfig(); loadVersionInfo(); }
+}
+
+// ---------------------------------------------------------------------------
+// Toast
+// ---------------------------------------------------------------------------
+let toastTimer = null;
+function toast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (isError ? ' error' : '');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = 'toast'; }, 3000);
+}
+
+// ---------------------------------------------------------------------------
+// Server control
+// ---------------------------------------------------------------------------
+async function serverAction(action) {
+  const btn = document.getElementById('btn-' + action);
+  btn.disabled = true;
+  try {
+    const r = await apiFetch('/api/' + action, { method: 'POST' });
+    const d = await r.json();
+    if (r.ok) {
+      toast(d.message || action + ' OK');
+    } else {
+      toast(d.detail || 'Error', true);
+    }
+    await refreshStatus();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Logs
+// ---------------------------------------------------------------------------
+function connectLogWs() {
+  if (wsLog) wsLog.close();
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  wsLog = new WebSocket(`${proto}//${location.host}/api/logs/stream`);
+  wsLog.onmessage = e => appendLog(e.data);
+  wsLog.onclose = () => setTimeout(connectLogWs, 3000);
+}
+
+function formatLogLine(raw) {
+  if (raw.startsWith('[manager]')) return `<span class="c-mgr">${escHtml(raw)}</span>`;
+  if (raw.startsWith('[err]'))     return `<span class="c-err">${escHtml(raw)}</span>`;
+
+  // Factorio lines begin with an optional decimal timestamp: "   0.001 "
+  const m = raw.match(/^(\s*[\d.]+\s+)([\s\S]*)$/);
+  const ts   = m ? m[1] : '';
+  const body = m ? m[2] : raw;
+
+  let cls = '';
+  if      (/^Error\b/.test(body))      cls = 'c-err';
+  else if (/^Warning\b/.test(body))    cls = 'c-warn';
+  else if (/^\[CHAT\]/.test(body))     cls = 'c-chat';
+  else if (/^\[JOIN\]/.test(body))     cls = 'c-join';
+  else if (/^\[LEAVE\]/.test(body))    cls = 'c-leave';
+  else if (/^\[COMMAND\]/.test(body))  cls = 'c-cmd';
+  else if (/^\[DISCORD\]/.test(body))  cls = 'c-discord';
+
+  const tsHtml   = ts   ? `<span class="c-ts">${escHtml(ts)}</span>` : '';
+  const bodyHtml = cls  ? `<span class="${cls}">${escHtml(body)}</span>` : escHtml(body);
+  return tsHtml + bodyHtml;
+}
+
+function appendLog(line) {
+  const box = document.getElementById('log-box');
+  const div = document.createElement('div');
+  div.className = 'line';
+  div.innerHTML = formatLogLine(line);
+  box.appendChild(div);
+  while (box.children.length > 2000) box.removeChild(box.firstChild);
+  if (document.getElementById('autoscroll').checked) box.scrollTop = box.scrollHeight;
+}
+
+function clearLogs() {
+  document.getElementById('log-box').innerHTML = '';
+}
+
+// ---------------------------------------------------------------------------
+// Mods
+// ---------------------------------------------------------------------------
+async function loadModList() {
+  const c = document.getElementById('mod-list-container');
+  try {
+    const r = await apiFetch('/api/mods');
+    const { mods } = await r.json();
+    if (!mods.length) { c.innerHTML = '<p style="color:var(--muted)">No mods installed.</p>'; return; }
+    c.innerHTML = `
+      <div class="mod-toolbar">
+        <button class="btn secondary" style="font-size:12px;padding:5px 12px" onclick="bulkModAction('enable')">Enable</button>
+        <button class="btn secondary" style="font-size:12px;padding:5px 12px" onclick="bulkModAction('disable')">Disable</button>
+        <button class="btn danger" style="font-size:12px;padding:5px 12px" onclick="bulkModAction('remove')">Remove</button>
+        <span class="selection-count" id="mod-selection-count"></span>
+      </div>
+      <table>
+        <thead><tr>
+          <th style="width:36px"><input type="checkbox" id="mod-select-all" onchange="toggleSelectAllMods(this.checked)"></th>
+          <th>Name</th><th>Version</th><th>Status</th>
+        </tr></thead>
+        <tbody>${mods.map(m => `
+          <tr>
+            <td><input type="checkbox" class="mod-checkbox" value="${escHtml(m.name)}" data-builtin="${m.builtin ? '1' : ''}" onchange="updateModSelectionCount()"></td>
+            <td>${escHtml(m.name)}${m.builtin ? ' <span class="badge dlc">DLC</span>' : ''}</td>
+            <td>${escHtml(m.version)}</td>
+            <td><span class="badge ${m.enabled ? 'enabled' : 'disabled'}">${m.enabled ? 'Enabled' : 'Disabled'}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch (e) {
+    c.innerHTML = `<p style="color:var(--danger)">${e.message}</p>`;
+  }
+}
+
+function getSelectedMods() {
+  return [...document.querySelectorAll('.mod-checkbox:checked')].map(cb => cb.value);
+}
+
+function updateModSelectionCount() {
+  const checked = document.querySelectorAll('.mod-checkbox:checked');
+  const all = document.querySelectorAll('.mod-checkbox');
+  const el = document.getElementById('mod-selection-count');
+  if (el) el.textContent = checked.length ? `${checked.length} of ${all.length} selected` : '';
+  const selectAll = document.getElementById('mod-select-all');
+  if (selectAll) {
+    selectAll.checked = all.length > 0 && checked.length === all.length;
+    selectAll.indeterminate = checked.length > 0 && checked.length < all.length;
+  }
+}
+
+function toggleSelectAllMods(checked) {
+  document.querySelectorAll('.mod-checkbox').forEach(cb => { cb.checked = checked; });
+  updateModSelectionCount();
+}
+
+async function bulkModAction(action) {
+  const names = getSelectedMods();
+  if (!names.length) { toast('Select at least one mod first', true); return; }
+  if (action === 'remove') {
+    const builtinNames = [...document.querySelectorAll('.mod-checkbox:checked[data-builtin="1"]')].map(cb => cb.value);
+    const removable = names.filter(n => !document.querySelector(`.mod-checkbox[value="${n}"][data-builtin="1"]`));
+    if (builtinNames.length && !removable.length) { toast('DLC mods cannot be removed', true); return; }
+    if (!removable.length) { toast('Select at least one non-DLC mod to remove', true); return; }
+    if (!confirm(`Remove ${removable.length} mod(s)?\n\n${removable.join(', ')}`)) return;
+    let failed = 0;
+    for (const name of removable) {
+      const r = await apiFetch(`/api/mods/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      if (!r.ok) failed++;
+    }
+    toast(failed ? `Removed ${removable.length - failed} mod(s), ${failed} failed` : `Removed ${removable.length} mod(s)`);
+  } else {
+    const enabled = action === 'enable';
+    for (const name of names) {
+      await apiFetch(`/api/mods/${encodeURIComponent(name)}`, { method: 'PATCH', body: { enabled } });
+    }
+    toast(`${enabled ? 'Enabled' : 'Disabled'} ${names.length} mod(s)`);
+  }
+  loadModList();
+}
+
+async function uploadMod() {
+  const file = document.getElementById('mod-file-input').files[0];
+  if (!file) return toast('Select a file', true);
+  const fd = new FormData();
+  fd.append('file', file);
+  const r = await apiFetch('/api/mods/upload', { method: 'POST', body: fd });
+  const d = await r.json();
+  if (r.ok) { toast(`Uploaded ${d.name} v${d.version}`); loadModList(); }
+  else toast(d.detail, true);
+}
+
+function saveCredentials() {
+  localStorage.setItem('fm_username', document.getElementById('factorio-username').value);
+  localStorage.setItem('fm_token', document.getElementById('factorio-token').value);
+}
+
+function loadCredentials() {
+  document.getElementById('factorio-username').value = localStorage.getItem('fm_username') || '';
+  document.getElementById('factorio-token').value = localStorage.getItem('fm_token') || '';
+}
+
+async function searchMods() {
+  const q = document.getElementById('mod-search-input').value.trim();
+  if (!q) return;
+  const el = document.getElementById('mod-search-results');
+  el.innerHTML = '<div style="margin-top:8px"><span class="spinner"></span></div>';
+  try {
+    const r = await apiFetch(`/api/mods/search?q=${encodeURIComponent(q)}`);
+    if (!r.ok) {
+      const err = await r.json();
+      el.innerHTML = `<p style="color:var(--danger);margin-top:8px">Search failed: ${err.detail || r.status}</p>`;
+      return;
+    }
+    const { results = [] } = await r.json();
+    if (!results.length) {
+      el.innerHTML = '<p style="color:var(--muted);margin-top:8px">No results found.</p>';
+      return;
+    }
+    el.innerHTML = `<div class="search-results" style="margin-top:8px">${results.map(m => `
+      <div class="search-result-item">
+        <div style="min-width:0;flex:1;margin-right:12px">
+          <strong>${escHtml(m.name)}</strong>
+          <span style="color:var(--muted);font-size:11px;margin-left:8px">${escHtml(m.title || '')}</span>
+          ${m.owner ? `<span style="color:var(--muted);font-size:11px"> by ${escHtml(m.owner)}</span>` : ''}<br>
+          <small style="color:var(--muted)">${escHtml((m.summary || '').slice(0, 140))}</small>
+        </div>
+        <button class="btn secondary" style="font-size:11px;padding:4px 10px;white-space:nowrap;flex-shrink:0"
+          onclick="installFromPortal('${escAttr(m.name)}', this)">Install</button>
+      </div>`).join('')}
+    </div>`;
+  } catch (e) {
+    el.innerHTML = `<p style="color:var(--danger);margin-top:8px">Error: ${e.message}</p>`;
+  }
+}
+
+async function installFromPortal(modName, btn) {
+  const username = document.getElementById('factorio-username').value.trim();
+  const token = document.getElementById('factorio-token').value.trim();
+  if (!username || !token) {
+    toast('Enter your Factorio username and API token above first', true);
+    document.getElementById('factorio-username').focus();
+    return;
+  }
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Resolving…';
+
+  // Replace the result row with a status area
+  const row = btn.closest('.search-result-item');
+  const statusEl = document.createElement('div');
+  statusEl.style = 'padding:8px 0;font-size:12px;color:var(--muted)';
+  statusEl.textContent = 'Resolving dependencies…';
+  if (row) row.replaceWith(statusEl);
+
+  try {
+    const r = await apiFetch('/api/mods/install', { method: 'POST', body: { name: modName, username, token } });
+    const d = await r.json();
+    if (!r.ok) { statusEl.innerHTML = `<span style="color:var(--danger)">${escHtml(d.detail || 'Install failed')}</span>`; return; }
+
+    loadModList();
+
+    const installed = d.installed || [];
+    const skipped  = d.skipped  || [];
+    const conflicts = d.conflicts || [];
+
+    const root = installed.find(x => !x.is_dependency);
+    const deps  = installed.filter(x => x.is_dependency);
+    const upgrades = installed.filter(x => x.upgrade);
+
+    let summary = root
+      ? `Installed <strong>${escHtml(root.name)}</strong> v${escHtml(root.version)}`
+      : `Nothing new installed`;
+    if (deps.length)     summary += ` + ${deps.length} dependenc${deps.length === 1 ? 'y' : 'ies'}`;
+    if (upgrades.length) summary += ` (${upgrades.length} upgraded)`;
+    if (skipped.length)  summary += `, ${skipped.length} already present`;
+
+    let html = `<div style="padding:8px 0;border-top:1px solid var(--border);font-size:12px">
+      <div style="margin-bottom:6px">${summary}</div>`;
+
+    if (installed.length > 1) {
+      html += `<div style="color:var(--muted);margin-bottom:4px">`;
+      for (const m of installed) {
+        const tag = m.upgrade ? ' ↑' : m.is_dependency ? ' (dep)' : '';
+        html += `<span style="margin-right:10px">${escHtml(m.name)} ${escHtml(m.version)}${tag}</span>`;
+      }
+      html += `</div>`;
+    }
+
+    if (conflicts.length) {
+      html += `<div style="color:#e67e22;margin-top:4px"><strong>Conflicts:</strong> `;
+      html += conflicts.map(c => escHtml(c)).join(' · ');
+      html += `</div>`;
+    }
+
+    if (d.restart_required) {
+      html += `<button class="btn danger" style="margin-top:8px;font-size:11px;padding:4px 12px"
+        onclick="serverAction('restart');this.textContent='Restarting…';this.disabled=true">
+        Restart server to load mods</button>`;
+    }
+
+    html += `</div>`;
+    statusEl.innerHTML = html;
+  } catch(e) {
+    statusEl.innerHTML = `<span style="color:var(--danger)">${escHtml(e.message)}</span>`;
+  }
+}
+
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escAttr(s) { return String(s).replace(/'/g,"\\'"); }
+
+// ---------------------------------------------------------------------------
+// Saves
+// ---------------------------------------------------------------------------
+async function createNewWorld() {
+  const name = document.getElementById('new-world-name').value.trim() || 'new-world';
+  const btn = document.getElementById('btn-create-world');
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+  try {
+    const r = await apiFetch('/api/saves/new', { method: 'POST', body: { name } });
+    const d = await r.json();
+    if (!r.ok) { toast(d.detail || 'Generation failed', true); return; }
+    toast(`Created ${d.name} — starting server…`);
+    loadSaveList();
+    await serverAction('start');
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Generate & Start';
+  }
+}
+
+async function loadSaveList() {
+  const c = document.getElementById('save-list-container');
+  try {
+    const r = await apiFetch('/api/saves');
+    const { saves, active } = await r.json();
+    if (!saves.length) { c.innerHTML = '<p style="color:var(--muted)">No save files found.</p>'; return; }
+    c.innerHTML = `
+      <table>
+        <thead><tr><th>Name</th><th>Size</th><th>Modified</th><th></th></tr></thead>
+        <tbody>${saves.map(s => `
+          <tr>
+            <td>${s.name} ${s.name === active || '/factorio/saves/' + s.name === active ? '<span class="badge enabled">active</span>' : ''}</td>
+            <td>${(s.size / 1024 / 1024).toFixed(2)} MB</td>
+            <td>${new Date(s.modified * 1000).toLocaleString()}</td>
+            <td style="display:flex;gap:8px">
+              <a href="/api/saves/${encodeURIComponent(s.name)}" class="btn secondary" style="padding:4px 10px;font-size:11px;text-decoration:none" download>Download</a>
+              <button class="btn danger" style="padding:4px 10px;font-size:11px" onclick="deleteSave('${s.name}')">Delete</button>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch (e) {
+    c.innerHTML = `<p style="color:var(--danger)">${e.message}</p>`;
+  }
+}
+
+async function uploadSave() {
+  const file = document.getElementById('save-file-input').files[0];
+  if (!file) return toast('Select a file', true);
+  const fd = new FormData();
+  fd.append('file', file);
+  const r = await apiFetch('/api/saves', { method: 'POST', body: fd });
+  const d = await r.json();
+  if (r.ok) { toast(`Uploaded ${d.name}`); loadSaveList(); }
+  else toast(d.detail, true);
+}
+
+async function deleteSave(name) {
+  if (!confirm(`Delete save "${name}"?`)) return;
+  const r = await apiFetch(`/api/saves/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  if (r.ok) { toast(`Deleted ${name}`); loadSaveList(); }
+  else { const d = await r.json(); toast(d.detail, true); }
+}
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+const CONFIG_FIELDS = [
+  { key: 'name', label: 'Server Name', type: 'text' },
+  { key: 'description', label: 'Description', type: 'text' },
+  { key: 'game_password', label: 'Game Password', type: 'password' },
+  { key: 'max_players', label: 'Max Players (0=unlimited)', type: 'number' },
+  { key: 'autosave_interval', label: 'Autosave Interval (min)', type: 'number' },
+  { key: 'autosave_slots', label: 'Autosave Slots', type: 'number' },
+  { key: 'afk_autokick_interval', label: 'AFK Kick (min, 0=off)', type: 'number' },
+  { key: 'allow_commands', label: 'Allow Commands', type: 'select', options: ['true','false','admins-only'] },
+  { key: 'auto_pause', label: 'Auto Pause (empty server)', type: 'checkbox' },
+  { key: 'require_user_verification', label: 'Require Factorio Account', type: 'checkbox' },
+  { key: 'non_blocking_saving', label: 'Non-blocking Saving', type: 'checkbox' },
+];
+
+async function loadConfig() {
+  const r = await apiFetch('/api/config');
+  currentConfig = await r.json();
+  renderConfigForm();
+  document.getElementById('config-raw').value = JSON.stringify(currentConfig, null, 2);
+}
+
+function renderConfigForm() {
+  const grid = document.getElementById('config-form');
+  grid.innerHTML = CONFIG_FIELDS.map(f => {
+    const val = currentConfig[f.key];
+    if (f.type === 'checkbox') {
+      return `<div class="field"><label>${f.label}</label>
+        <label class="toggle"><input type="checkbox" data-key="${f.key}" ${val ? 'checked' : ''}><span class="slider"></span></label></div>`;
+    }
+    if (f.type === 'select') {
+      return `<div class="field"><label>${f.label}</label>
+        <select data-key="${f.key}">${f.options.map(o => `<option ${o === val ? 'selected' : ''}>${o}</option>`).join('')}</select></div>`;
+    }
+    return `<div class="field"><label>${f.label}</label>
+      <input type="${f.type}" data-key="${f.key}" value="${val ?? ''}"></div>`;
+  }).join('');
+}
+
+async function saveConfig() {
+  const updated = { ...currentConfig };
+  document.querySelectorAll('#config-form [data-key]').forEach(el => {
+    const key = el.dataset.key;
+    const f = CONFIG_FIELDS.find(x => x.key === key);
+    if (f.type === 'checkbox') updated[key] = el.checked;
+    else if (f.type === 'number') updated[key] = Number(el.value);
+    else updated[key] = el.value;
+  });
+  const r = await apiFetch('/api/config', { method: 'PUT', body: updated });
+  if (r.ok) { toast('Config saved'); currentConfig = updated; document.getElementById('config-raw').value = JSON.stringify(updated, null, 2); }
+  else { const d = await r.json(); toast(d.detail, true); }
+}
+
+function toggleRawConfig() {
+  const s = document.getElementById('raw-config-section');
+  s.style.display = s.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveRawConfig() {
+  let parsed;
+  try { parsed = JSON.parse(document.getElementById('config-raw').value); }
+  catch { return toast('Invalid JSON', true); }
+  const r = await apiFetch('/api/config', { method: 'PUT', body: parsed });
+  if (r.ok) { toast('Config saved'); currentConfig = parsed; renderConfigForm(); }
+  else { const d = await r.json(); toast(d.detail, true); }
+}
+
+// ---------------------------------------------------------------------------
+// Version management
+// ---------------------------------------------------------------------------
+async function loadVersionInfo() {
+  try {
+    const r = await apiFetch('/api/version');
+    const d = await r.json();
+    document.getElementById('current-factorio-version').textContent = d.current || '?';
+    const stableEl = document.getElementById('stable-factorio-version');
+    const expEl = document.getElementById('experimental-factorio-version');
+    const btnStable = document.getElementById('btn-install-stable');
+    const btnExp = document.getElementById('btn-install-experimental');
+    if (d.stable) {
+      stableEl.textContent = d.stable;
+      btnStable.textContent = `Install Stable (${d.stable})`;
+    }
+    if (d.experimental) {
+      expEl.textContent = d.experimental;
+      btnExp.textContent = `Install Experimental (${d.experimental})`;
+    }
+  } catch (e) { /* non-fatal */ }
+}
+
+async function installFactorioVersion(version) {
+  version = (version || '').trim();
+  if (!version) { toast('Enter a version', true); return; }
+  if (!confirm(`Install Factorio ${version}?\n\nThe server will stop, update (this takes ~1 minute), then restart if it was running.`)) return;
+
+  const btns = ['btn-install-stable', 'btn-install-experimental']
+    .map(id => document.getElementById(id)).filter(Boolean);
+  btns.forEach(b => b.disabled = true);
+
+  toast(`Installing Factorio ${version}… watch the Logs tab`);
+  try {
+    const r = await apiFetch('/api/version', { method: 'POST', body: { version } });
+    const d = await r.json();
+    if (r.ok) {
+      toast(`Factorio ${d.version} installed`);
+      loadVersionInfo();
+      await refreshStatus();
+    } else {
+      toast(d.detail || 'Install failed', true);
+    }
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btns.forEach(b => b.disabled = false);
+  }
+}
+</script>
+</body>
+</html>
