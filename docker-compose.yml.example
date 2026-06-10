@@ -1,0 +1,35 @@
+services:
+  factorio:
+    platform: linux/amd64
+    image: ghcr.io/b1fr0st/factorio-server:latest
+    restart: unless-stopped
+    ports:
+      - "34197:34197/udp" # game
+      - "27015:27015/tcp" # rcon (optional)
+      - "8080:8080/tcp" # manager UI
+    volumes:
+      - factorio-data:/factorio
+    environment:
+      # Protect the manager HTTP endpoint (leave blank to disable auth)
+      MANAGER_PASSWORD: ""
+
+      # Optionally pin the save file the server starts. If unset, the most
+      # recently modified save in /factorio/saves/ is used.
+      # FACTORIO_SAVE: /factorio/saves/my-world.zip
+
+      # Pre-fill mod portal credentials so you don't type them in the UI
+      # FACTORIO_USERNAME: ""
+      # FACTORIO_TOKEN: ""
+
+      # RCON — omit RCON_PASSWORD to disable RCON entirely
+      # RCON_PORT: "27015"
+      # RCON_PASSWORD: ""
+
+      # Override manager listen port (default 8080)
+      # MANAGER_PORT: "8080"
+
+      # Override data directory (default /factorio)
+      # FACTORIO_DIR: "/factorio"
+
+volumes:
+  factorio-data:
